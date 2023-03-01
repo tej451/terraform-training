@@ -1,0 +1,105 @@
+/*
+Provision the AWS Infa as per the following Conditions:
+1: Create 4 Instances each in two diffrent Regions.
+2: It should have one backend & frontend Instance in each avaliablity zone.
+3: If updated, the new frontend instance or server must be up & running before delete or destroying the older onces
+4: The backend servers should not be deleted or changed.
+5: Output of Frontend & Backend IP Address of Region1.
+*/
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+provider "aws" {
+  region = "us-east-1"
+  alias = "backup-region"
+}
+
+variable "az-1" {
+  default = [ "us-east-1a", "us-east-1b" ]
+}
+
+variable "az-2" {
+  default = [ "us-east-1c", "us-east-1d" ]
+}
+
+variable "instance_count" {
+  default = "2"
+}
+
+
+
+resource "aws_instance" "f-r1" {
+  count = var.instance_count
+  availability_zone = var.az-1[count.index]
+  ami = "ami-0dfcb1ef8550277af"
+  instance_type = "t2.micro"
+  depends_on = [ aws_instance.b-r1 ]
+  tags = {
+    Name = "Frontend-R1"
+    Project = "Terraform-Automation"
+    Team    = "DevOps"
+  }
+  lifecycle {
+    create_before_destroy = true //If updated, the new frontend instance / server must be up & running before delete / destroying the older onces
+  }
+}
+
+resource "aws_instance" "b-r1" {
+  count = var.instance_count
+  availability_zone = var.az-1[count.index]
+  ami = "ami-0dfcb1ef8550277af"
+  instance_type = "t2.micro"
+
+  tags = {
+    Name = "Backend-R1"
+    Project = "Terraform-Automation"
+    Team    = "DevOps"
+  }
+
+  lifecycle {
+    prevent_destroy = true // Backend servers should not be deleted
+  }
+
+}
+
+resource "aws_instance" "f-r2" {
+  count = var.instance_count
+  provider = aws.backup-region
+  availability_zone = var.az-2[count.index]
+  ami = "ami-0dfcb1ef8550277af"
+  instance_type = "t2.micro"
+  depends_on = [ aws_instance.b-r2 ]
+  tags = {
+    Name = "Frontend-R2"
+    Project = "Terraform-Automation"
+    Team    = "DevOps"
+  }
+  lifecycle {
+    create_before_destroy = true // If updated, the new frontend instance / server must be up & running before delete / destroying the older onces
+  }
+}
+
+resource "aws_instance" "b-r2" {
+  count = var.instance_count
+  provider = aws.backup-region
+  availability_zone = var.az-2[count.index]
+  ami = "ami-0dfcb1ef8550277af"
+  instance_type = "t2.micro"
+
+  tags = {
+    Name = "Backend-R2"
+    Project = "Terraform-Automation"
+    Team    = "DevOps"
+  }
+
+  lifecycle {
+    prevent_destroy = true // Backend servers should not be deleted
+  }
+
+}
+
+output "public_ips" {
+  value = "${tolist([aws_instance.f-r1.*.private_ip, aws_instance.b-r1.*.private_ip])}"
+}
